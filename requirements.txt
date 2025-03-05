@@ -1,0 +1,13 @@
+torch
+torchvision
+pandas
+numpy
+omegaconf
+lightning
+scikit-learn
+nibabel
+batchgenerators
+monai
+ipykernel
+wandb
+nnunet
