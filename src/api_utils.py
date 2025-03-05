@@ -143,10 +143,10 @@ def get_image(batch_number, img_number):
 def compute_entropy_dataframe(model, data_loader=test_loader):
 
     model = load_model()
-    model = model.cuda()
-    model.eval()
+    model = model.cuda() #move model to gpu
+    model.eval() #set to eval mode. disables dropout layers too.
     
-    entropies = []
+    statistics = []
 
     softmax = torch.nn.Softmax(dim=1)
     
@@ -154,30 +154,30 @@ def compute_entropy_dataframe(model, data_loader=test_loader):
         for i, batch in enumerate(data_loader):
             img_batch = batch['input'].cuda()
             
-            # Compute a single prediction per image instead of looping multiple times
+            #get predictions of all images in batch in parallel
             pred = model(img_batch)
             prob = softmax(pred)
+
+            #Compute statistics for the predictictions
+            error = (prob.argmax(dim=1)!=batch['target'].cuda().squeeze()).float()
+            avg_error = error.mean(dim=(1,2)).tolist()
             entropy = Categorical(probs=prob.moveaxis(1, 3)).entropy()
-            # Compue other uncertainty measures here
-            
+            avg_entropies = entropy.mean(dim=(1, 2)).tolist()
+            # Compute other uncertainty measures here
+            #TODO
+
+
+            #Generate index columns specifying batch and image_no
             batch_indices = torch.full((img_batch.shape[0],), i, dtype=torch.int)
             image_indices = torch.arange(img_batch.shape[0])
-            avg_entropies = entropy.mean(dim=(1, 2)).tolist()
-            # add other uncertainty measures here
             
-            entropies.extend(
-                zip(batch_indices.tolist(), image_indices.tolist(), avg_entropies)
+            #TODO add the new measures to the zip (Don't forget to give the column a name as well when constructing the dataframe)
+            statistics.extend(
+                zip(batch_indices.tolist(), image_indices.tolist(), avg_error, avg_entropies)
             )
             
 
     
-    df = pd.DataFrame(entropies, columns=['batch_index', 'image_index', 'avg_entropy'])
-    df = df.sort_values(by='avg_entropy', ascending=False)
+    df = pd.DataFrame(statistics, columns=['batch_index', 'image_index', 'avg_error', 'avg_entropy'])
+    df = df.sort_values(by='avg_error', ascending=False)
     return df
-
-    for i, batch in enumerate(test_loader):
-        if i == 3:
-            break
-
-    img = batch['input'][4]
-    return img.tolist()
