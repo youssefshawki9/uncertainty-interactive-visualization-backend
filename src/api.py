@@ -22,8 +22,8 @@ def get_image():
 
 
 @app.route("/get-dataframe", methods=["GET"])
-def compute_entropy_dataframe():
-    return jsonify({"dataframe": api_utils.compute_entropy_dataframe()})
+def get_stats_dataframe():
+    return jsonify({"dataframe": api_utils.get_stats_dataframe()})
 
 # @app.route("/get-image-batch", methods=["GET"])
 # def get_image_batch():
