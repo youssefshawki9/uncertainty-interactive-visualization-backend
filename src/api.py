@@ -25,6 +25,11 @@ def get_image():
 def get_stats_dataframe():
     return jsonify({"dataframe": api_utils.get_stats_dataframe()})
 
+@app.route("/get-images", method=["GET"])
+def get_images(requested_images): #Is this correct?
+    indices = requested_images #We probably need to typecast the received value? What does the UI send us? JSON? need to test.
+    return jsonify({"images": api_utils.get_images(indices)})
+
 # @app.route("/get-image-batch", methods=["GET"])
 # def get_image_batch():
 #     batch_number = request.json.get("batch_number")
