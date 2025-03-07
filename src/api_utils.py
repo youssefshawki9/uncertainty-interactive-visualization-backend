@@ -13,7 +13,7 @@ import pandas as pd
 from torch.distributions import Categorical
 
 from threading import Thread
-
+from collections import defaultdict
 
 # def __init__(self):
 #     #TODO: load config
@@ -167,14 +167,55 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
         case "Currently Generating": return None #Safety net for preventing restarting the Thread if it's still running
         case "Generated": return stats_dataframe.to_json()
 
+def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
+    """
+    Parameters:
+        image_indices: List of (batch_index, image_index) tuples
+    Returns:
+        DataFrame: JSON of pandas DataFrame with columns [batch_index, image_index, input_image, target_image, prediction_image, entropy_image] 
+        or None if the dataloader is not yet initialized.
 
+    Notes:
+        Showcase for this function in lab_draft notebook. Strg+F for GETIMAGES
+    """
 
-def get_image_batch(batch_number):
-    test_loader = get_data_loader()
-    batch = test_loader[batch_number]
+    if not dataloader: return None
 
-    return batch['input'].tolist()
+    #create a dict from the list for efficient enumeration (can't address directly with our dataloader)
+    indices = defaultdict(list)
+    for k,v in image_indices: indices[k].append(v)
 
+    #setup model and utilities
+    model = load_model()
+    dataloader = get_data_loader()
+    model = model.cuda() #move model to gpu
+    model.eval() #set to eval mode. disables dropout layers too.
+    softmax = torch.nn.Softmax(dim=1)
+
+    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image = [],[],[],[],[],[],[]
+    for i,batch in enumerate(dataloader):
+        if i in indices.keys():
+            images = batch["input"].cuda()
+            for im_idx in indices[i]:
+                position.append(image_indices.index((i,im_idx))) #Helper column for custom ordering
+                batch_index.append(i)
+                image_index.append(im_idx)
+                input_image.append(batch["input"][im_idx].squeeze().numpy())
+                target_image.append(batch["target"][im_idx].squeeze().numpy())
+                
+                #Get predictions and uncertainty images
+                with torch.no_grad():
+                    pred = model(images[im_idx:im_idx+1])
+                    prob = softmax(pred)
+                    prediction_image.append(prob.argmax(dim=1).squeeze().cpu().numpy())
+                #TODO: Other uncertainties
+                entropy = Categorical(prob.moveaxis(1,3)).entropy()
+                entropy_image.append(entropy.squeeze().cpu().numpy())
+    
+    #Prepare the results and return them
+    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image)
+    images_df = pd.DataFrame(data, index=position, columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image"]).sort_index()
+    return images_df.drop(column="position").to_json() #don't need the helper column anymore
 
 def get_image(batch_number, img_number):
     # img = test_loader.dataset[batch_number]['input'][img_number]
