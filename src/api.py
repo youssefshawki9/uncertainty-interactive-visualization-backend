@@ -25,7 +25,7 @@ def get_image():
 def get_stats_dataframe():
     return jsonify({"dataframe": api_utils.get_stats_dataframe()})
 
-@app.route("/get-images", method=["GET"])
+@app.route("/get-images", methods=["GET"])
 def get_images(): #Is this correct?
     indices = request.json.get("image_indices") 
     return jsonify({"images": api_utils.get_images(indices)})
