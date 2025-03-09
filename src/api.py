@@ -27,7 +27,9 @@ def get_stats_dataframe():
 
 @app.route("/get-images", methods=["GET"])
 def get_images(): #Is this correct?
-    indices = request.json.get("image_indices") 
+    indices = request.json.get("image_indices")
+    # Cast elements of indices to tuples
+    indices = [tuple(index) for index in indices]
     return jsonify({"images": api_utils.get_images(indices)})
 
 # @app.route("/get-image-batch", methods=["GET"])

@@ -178,7 +178,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     Notes:
         Showcase for this function in lab_draft notebook. Strg+F for GETIMAGES
     """
-
+    global dataloader
     if not dataloader: return None
 
     #create a dict from the list for efficient enumeration (can't address directly with our dataloader)
@@ -215,7 +215,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     #Prepare the results and return them
     data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image)
     images_df = pd.DataFrame(data, index=position, columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image"]).sort_index()
-    return images_df.drop(column="position").to_json() #don't need the helper column anymore
+    return images_df.drop(columns="position").to_json() #don't need the helper column anymore
 
 def get_image(batch_number, img_number):
     # img = test_loader.dataset[batch_number]['input'][img_number]
