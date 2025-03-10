@@ -192,7 +192,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     model.eval() #set to eval mode. disables dropout layers too.
     softmax = torch.nn.Softmax(dim=1)
 
-    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image = [],[],[],[],[],[],[],[]
+    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, assuredness_image = [],[],[],[],[],[],[],[],[]
     for i,batch in enumerate(dataloader):
         if i in indices.keys():
             images = batch["input"].cuda()
@@ -207,18 +207,23 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
                 with torch.no_grad():
                     pred = model(images[im_idx:im_idx+1])
                     prob = softmax(pred)
-                    prediction_image.append(prob.argmax(dim=1).squeeze().cpu().numpy())
-                #TODO: Other uncertainties
+                    highest_class_prob = torch.max(prob,dim=1) #returns an object with "values" and "indices" parameters
+                prediction_image.append(highest_class_prob.indices.squeeze().cpu().numpy())
+
+                #Different uncertainty measures: Entropy, Perplexity, 'Assuredness'
                 entropy = Categorical(prob.moveaxis(1,3)).entropy()
                 entropy_image.append(entropy.squeeze().cpu().numpy())
-                perplexity = Categorical(prob.moveaxis(1,3)).perplexity()
+                perplexity = Categorical(prob.moveaxis(1,3)).perplexity() #This is just exp(entropy), but torch supplies a wrapper for that so we use it. Could be this is slightly slower, as we are computing entropy twice. Need to look at tensor operation optimizations in torch to confirm.
                 perplexity_image.append(perplexity.squeeze().cpu().numpy())
+                assuredness = 1 - highest_class_prob.values.squeeze().cpu().numpy()
+                assuredness_image.append(assuredness)
+
         if i == max(indices): break #No need to keep enumerating if we have no remaining key denoting a later batch left in the dict
     
     #Prepare the results and return them
-    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image)
+    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, assuredness_image)
     images_df = pd.DataFrame(data, index=position, 
-                             columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image"]).sort_index()
+                             columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image", "assuredness_image"]).sort_index()
     return images_df.drop(column="position").to_json() #don't need the helper column anymore
 
 def get_image(batch_number, img_number):
