@@ -192,7 +192,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     model.eval() #set to eval mode. disables dropout layers too.
     softmax = torch.nn.Softmax(dim=1)
 
-    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image = [],[],[],[],[],[],[]
+    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image = [],[],[],[],[],[],[],[]
     for i,batch in enumerate(dataloader):
         if i in indices.keys():
             images = batch["input"].cuda()
@@ -211,11 +211,14 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
                 #TODO: Other uncertainties
                 entropy = Categorical(prob.moveaxis(1,3)).entropy()
                 entropy_image.append(entropy.squeeze().cpu().numpy())
+                perplexity = Categorical(prob.moveaxis(1,3)).perplexity()
+                perplexity_image.append(perplexity.squeeze().cpu().numpy())
         if i == max(indices): break #No need to keep enumerating if we have no remaining key denoting a later batch left in the dict
     
     #Prepare the results and return them
-    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image)
-    images_df = pd.DataFrame(data, index=position, columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image"]).sort_index()
+    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image)
+    images_df = pd.DataFrame(data, index=position, 
+                             columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image"]).sort_index()
     return images_df.drop(column="position").to_json() #don't need the helper column anymore
 
 def get_image(batch_number, img_number):
