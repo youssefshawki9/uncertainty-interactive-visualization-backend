@@ -178,7 +178,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     Notes:
         Showcase for this function in lab_draft notebook. Strg+F for GETIMAGES
     """
-
+    global dataloader
     if not dataloader: return None
 
     #create a dict from the list for efficient enumeration (can't address directly with our dataloader)
