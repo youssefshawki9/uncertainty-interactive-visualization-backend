@@ -2,7 +2,7 @@ import sys, string, random
 from datetime import datetime
 sys.path.append('../')
 from omegaconf import OmegaConf
-# import wandb
+# import wandb #this config doesn't need weights and biases module. only inference.
 import torch
 from monai.networks.nets import UNet
 
@@ -15,54 +15,10 @@ from torch.distributions import Categorical
 from threading import Thread
 from collections import defaultdict
 
-# def __init__(self):
-#     #TODO: load config
-
-#     #init datamodule
-#     mnmv2_config   = OmegaConf.load('configs/mnmv2.yaml')
-
-#     data_dir = "../../lennartz/data/MNM/"
-#     datamodule = MNMv2DataModule(
-#         data_dir=data_dir,
-#         vendor_assignment=mnmv2_config.vendor_assignment,
-#         batch_size=mnmv2_config.batch_size,
-#         binary_target=mnmv2_config.binary_target,
-#         non_empty_target=mnmv2_config.non_empty_target,
-#     )
-
-#     datamodule.setup('test')
-#     test_loader = datamodule.test_dataloader()
-
-
-
-#     # load model using checkpoint instead of config file
-#     checkpoint_path = 'checkpoints/mnmv2-11-52_29-10-2024.ckpt'
-
-
-#     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
-#     model_state_dict = checkpoint['state_dict']
-#     model_state_dict = {k.replace('model.model.', 'model.'): v for k, v in model_state_dict.items() if k.startswith('model.')}
-#     model_config = checkpoint['hyper_parameters']['cfgs']
-
-
-
-#     model = UNet(
-#         spatial_dims=model_config['unet']['spatial_dims'],
-#         in_channels=model_config['unet']['in_channels'],
-#         out_channels=model_config['unet']['out_channels'],
-#         channels=[model_config['unet']['n_filters_init'] * 2 ** i for i in range(model_config['unet']['depth'])],
-#         strides=[2] * (model_config['unet']['depth'] - 1),
-#         num_res_units=4
-#     )
-
-#     model.load_state_dict(model_state_dict)
-
-#     return model, test_loader
-
 
 #Define the standard datamodule
-data_dir = "../../lennartz/data/MNM/"
-mnmv2_config   = OmegaConf.load('configs/mnmv2.yaml')
+data_dir = "../../lennartz/data/MNM/" #Change to point to data directory
+mnmv2_config   = OmegaConf.load('configs/mnmv2.yaml') #Change to point to config directory
 datamodule = MNMv2DataModule(
     data_dir=data_dir,
     vendor_assignment=mnmv2_config.vendor_assignment,
@@ -140,8 +96,13 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
                 avg_error = error.mean(dim=(1,2)).tolist()
                 entropy = Categorical(probs=prob.moveaxis(1, 3)).entropy()
                 avg_entropies = entropy.mean(dim=(1, 2)).tolist()
-                # Compute other uncertainty measures here
-                #TODO
+                
+                #TODO: Test the following
+                perplexity = Categorical(probs=prob.moveaxis(1, 3)).perplexity()
+                avg_perplexities = perplexity.mean(dim=(1, 2)).tolist()
+                highest_class_prob = torch.max(prob,dim=1) #object with values and indices
+                highest_class_mean = highest_class_prob.values.mean(dim=(1,2))
+                counterprobabilities = 1 - highest_class_mean.squeeze().cpu().numpy().tolist()
 
                 #Generate index columns specifying batch and image_no
                 batch_indices = torch.full((img_batch.shape[0],), i, dtype=torch.int)
@@ -149,10 +110,10 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
                 
                 #TODO add the new measures to the zip (Don't forget to give the column a name as well when constructing the dataframe)
                 statistics.extend(
-                    zip(batch_indices.tolist(), image_indices.tolist(), avg_error, avg_entropies)
+                    zip(batch_indices.tolist(), image_indices.tolist(), avg_error, avg_entropies, avg_perplexities, counterprobabilities)
                 )
                 
-        df = pd.DataFrame(statistics, columns=['batch_index', 'image_index', 'avg_error', 'avg_entropy'])
+        df = pd.DataFrame(statistics, columns=['batch_index', 'image_index', 'avg_error', 'avg_entropy', 'avg_perplexities', 'counterprobabilities'])
         df = df.sort_values(by='avg_error', ascending=False)
         stats_dataframe = df
         status_stats_dataframe = "Generated"
@@ -192,7 +153,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     model.eval() #set to eval mode. disables dropout layers too.
     softmax = torch.nn.Softmax(dim=1)
 
-    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, assuredness_image = [],[],[],[],[],[],[],[],[]
+    position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, counterprobability_image = [],[],[],[],[],[],[],[],[]
     for i,batch in enumerate(dataloader):
         if i in indices.keys():
             images = batch["input"].cuda()
@@ -215,17 +176,18 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
                 entropy_image.append(entropy.squeeze().cpu().numpy())
                 perplexity = Categorical(prob.moveaxis(1,3)).perplexity() #This is just exp(entropy), but torch supplies a wrapper for that so we use it. Could be this is slightly slower, as we are computing entropy twice. Need to look at tensor operation optimizations in torch to confirm.
                 perplexity_image.append(perplexity.squeeze().cpu().numpy())
-                assuredness = 1 - highest_class_prob.values.squeeze().cpu().numpy()
-                assuredness_image.append(assuredness)
+                counterprobability = 1 - highest_class_prob.values.squeeze().cpu().numpy()
+                counterprobability_image.append(counterprobability)
 
         if i == max(indices): break #No need to keep enumerating if we have no remaining key denoting a later batch left in the dict
     
     #Prepare the results and return them
-    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, assuredness_image)
+    data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, counterprobability_image)
     images_df = pd.DataFrame(data, index=position, 
-                             columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image", "assuredness_image"]).sort_index()
+                             columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image", "counterprobability_image"]).sort_index()
     return images_df.drop(column="position").to_json() #don't need the helper column anymore
 
+#Deprecated method/unused: Use get_images instead
 def get_image(batch_number, img_number):
     # img = test_loader.dataset[batch_number]['input'][img_number]
     dataloader = get_data_loader()
@@ -237,7 +199,7 @@ def get_image(batch_number, img_number):
 
     return img.tolist()
 
-#Deprecated method: functionality is now handled by get_stats_dataframe. Should not be used by the api.
+#Deprecated method/unused: functionality is now handled by get_stats_dataframe. Should not be used by the api.
 def compute_entropy_dataframe(model, data_loader=get_data_loader()):
 
     model = load_model()
