@@ -32,13 +32,7 @@ def get_images(): #Is this correct?
     indices = [tuple(index) for index in indices]
     return jsonify({"images": api_utils.get_images(indices)})
 
-# @app.route("/get-image-batch", methods=["GET"])
-# def get_image_batch():
-#     batch_number = request.json.get("batch_number")
-#     return jsonify({"image_batch": api_utils.get_image_batch(batch_number)})
-
     
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=RUNNING_PORT)
