@@ -70,7 +70,6 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
 
     #The function called by the Thread object.
     #Computation of different measures of uncertainty is implemented here
-    #TODO Add additional uncertainty measures
     def compute_stats_dataframe():
         global stats_dataframe
         global status_stats_dataframe
@@ -96,10 +95,11 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
                 avg_error = error.mean(dim=(1,2)).tolist()
                 entropy = Categorical(probs=prob.moveaxis(1, 3)).entropy()
                 avg_entropies = entropy.mean(dim=(1, 2)).tolist()
-                
+
                 #TODO: Test the following
                 perplexity = Categorical(probs=prob.moveaxis(1, 3)).perplexity()
                 avg_perplexities = perplexity.mean(dim=(1, 2)).tolist()
+                #TODO: Test the following
                 highest_class_prob = torch.max(prob,dim=1) #object with values and indices
                 highest_class_mean = highest_class_prob.values.mean(dim=(1,2))
                 counterprobabilities = 1 - highest_class_mean.squeeze().cpu().numpy().tolist()
@@ -108,7 +108,7 @@ def get_stats_dataframe(force_recompute:bool=False) -> pd.DataFrame|None:
                 batch_indices = torch.full((img_batch.shape[0],), i, dtype=torch.int)
                 image_indices = torch.arange(img_batch.shape[0])
                 
-                #TODO add the new measures to the zip (Don't forget to give the column a name as well when constructing the dataframe)
+                #Add the new measures to the zip (Don't forget to give the column a name as well when constructing the dataframe)
                 statistics.extend(
                     zip(batch_indices.tolist(), image_indices.tolist(), avg_error, avg_entropies, avg_perplexities, counterprobabilities)
                 )
