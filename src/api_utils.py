@@ -224,7 +224,7 @@ def get_images(image_indices: list[tuple[int,int]]) -> pd.DataFrame|None:
     data = zip(position, batch_index, image_index, input_image, target_image, prediction_image, entropy_image, perplexity_image, assuredness_image)
     images_df = pd.DataFrame(data, index=position, 
                              columns=["position", "batch_index", "image_index", "input_image", "target_image", "prediction_image", "entropy_image", "perplexity_image", "assuredness_image"]).sort_index()
-    return images_df.drop(column="position").to_json() #don't need the helper column anymore
+    return images_df.drop(columns="position").to_json() #don't need the helper column anymore
 
 def get_image(batch_number, img_number):
     # img = test_loader.dataset[batch_number]['input'][img_number]
